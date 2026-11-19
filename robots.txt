@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://learnfrompallavi123-dbpo.vercel.app/sitemap.xml
