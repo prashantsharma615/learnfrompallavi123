@@ -3,7 +3,14 @@
 //  Firebase console → Project settings → Your apps → Web app → "Config"
 //  Leave FIREBASE_CONFIG = null to run in DEMO MODE (data saved only on this device).
 // ============================================================
-window.FIREBASE_CONFIG = null;
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAjswIHku5prt6j2YoJ0-7krMgm-GLPjpE",
+  authDomain: "learn-from-pallavi.firebaseapp.com",
+  projectId: "learn-from-pallavi",
+  storageBucket: "learn-from-pallavi.firebasestorage.app",
+  messagingSenderId: "817848068807",
+  appId: "1:817848068807:web:acdc3630ab3f955e3cace2"
+};
 /* Example:
 window.FIREBASE_CONFIG = {
   apiKey: "AIza....",
