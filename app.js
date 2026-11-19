@@ -2,6 +2,8 @@
 const LESSONS = window.LESSONS || [];
 const CLASSES = [1, 2, 3, 4, 5];
 const DEFAULT_PHOTO = "icons/pallavi.jpg"; // App producer — Pallavi Gupta
+const APP_VERSION = "2.0";
+const waLink = (phone, text) => `https://wa.me/${phone ? "91" + String(phone).replace(/\D/g, "").slice(-10) : ""}?text=${encodeURIComponent(text || "")}`;
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -90,6 +92,12 @@ class LocalDB {
   async listLessons() { return this._get("lessons", []); }
   async saveLesson(l) { const all = this._get("lessons", []).filter(x => x.id !== l.id); all.push(l); this._set("lessons", all); }
   async deleteLesson(id) { this._set("lessons", this._get("lessons", []).filter(x => x.id !== id)); }
+  async listDoubts(studentId) { const all = this._get("doubts", []); return studentId ? all.filter(d => d.studentId === studentId) : all; }
+  async addDoubt(d) { const all = this._get("doubts", []); all.unshift({ ...d, id: "d" + Date.now(), at: Date.now() }); this._set("doubts", all); }
+  async answerDoubt(id, answer) { this._set("doubts", this._get("doubts", []).map(d => d.id === id ? { ...d, answer, answeredAt: Date.now() } : d)); }
+  async deleteDoubt(id) { this._set("doubts", this._get("doubts", []).filter(d => d.id !== id)); }
+  exportAll() { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith("lpg_") && k !== "lpg_session") o[k] = localStorage.getItem(k); } return o; }
+  importAll(o) { Object.keys(o).forEach(k => { if (k.startsWith("lpg_") && k !== "lpg_session") localStorage.setItem(k, o[k]); }); }
   async listNotices() { return this._get("notices", []); }
   async addNotice(n) { const all = this._get("notices", []); all.unshift({ ...n, id: "n" + Date.now(), createdAt: Date.now() }); this._set("notices", all); }
   async deleteNotice(id) { this._set("notices", this._get("notices", []).filter(n => n.id !== id)); }
@@ -205,6 +213,14 @@ class FireDB {
   async listLessons() { const { collection, getDocs } = this.F; const snap = await getDocs(collection(this.db, "lessons")); return snap.docs.map(d => ({ ...d.data(), id: d.id })); }
   async saveLesson(l) { const { doc, setDoc } = this.F; await setDoc(doc(this.db, "lessons", l.id), l); }
   async deleteLesson(id) { const { doc, deleteDoc } = this.F; await deleteDoc(doc(this.db, "lessons", id)); }
+  async listDoubts(studentId) {
+    const { collection, query, where, getDocs } = this.F;
+    const q = studentId ? query(collection(this.db, "doubts"), where("uid", "==", this.auth.currentUser.uid)) : collection(this.db, "doubts");
+    const snap = await getDocs(q); return snap.docs.map(d => ({ ...d.data(), id: d.id })).sort((a, b) => b.at - a.at);
+  }
+  async addDoubt(d) { const { collection, addDoc } = this.F; await addDoc(collection(this.db, "doubts"), { ...d, uid: this.auth.currentUser.uid, at: Date.now() }); }
+  async answerDoubt(id, answer) { const { doc, updateDoc } = this.F; await updateDoc(doc(this.db, "doubts", id), { answer, answeredAt: Date.now() }); }
+  async deleteDoubt(id) { const { doc, deleteDoc } = this.F; await deleteDoc(doc(this.db, "doubts", id)); }
   async listNotices() {
     const { collection, getDocs } = this.F;
     const snap = await getDocs(collection(this.db, "notices"));
@@ -223,6 +239,16 @@ function mergeLessons(list) {
   (list || []).forEach(l => { if (l && l.id && l.title) LESSONS.push({ points: [], examples: [], ws: [], tip: { en: "", hi: "" }, intro: { en: "", hi: "" }, icon: "📘", ...l, custom: true }); });
   LESSONS.sort((a, b) => a.cls - b.cls);
 }
+
+/* ===================== PERSONAL PREFERENCES (this device) ===================== */
+const PREF = {
+  get(k, d) { try { return localStorage.getItem("lpg_pref_" + k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("lpg_pref_" + k, v); } catch { } },
+};
+const TEXT_SIZES = { s: "15px", m: "17px", l: "19px", xl: "21px" };
+function applyTextSize() { document.documentElement.style.fontSize = TEXT_SIZES[PREF.get("size", "m")] || "17px"; }
+const AVATARS = ["🦁", "🐯", "🐼", "🦊", "🐨", "🐰", "🦄", "🐸", "🐵", "🐧", "🦋", "🌟", "🚀", "⚽", "🎨", "🌸"];
+const myAvatar = () => PREF.get("avatar_" + (S.session && S.session.id), "🙂");
 
 /* ===================== STATE ===================== */
 const S = {
@@ -254,7 +280,8 @@ function teacherAvatar(size = 84) {
 }
 function bottomNav(active) {
   const it = (k, icon, l, h) => `<button class="${k === active ? "on" : ""}" onclick="go('${h}')"><span>${icon}</span>${l}</button>`;
-  return `<nav class="bottom-nav">${it("home", "🏠", "Learn", "")}${it("games", "🎮", "Games", "games")}${it("badges", "🏅", "Badges", "badges")}${it("progress", "📊", "Progress", "progress")}</nav>`;
+  const unread = (S.doubts || []).filter(d => d.answer && !PREF.get("seen_" + d.id)).length;
+  return `<nav class="bottom-nav">${it("home", "🏠", "Learn", "")}${it("games", "🎮", "Games", "games")}${it("ask", "💬", "Ask Ma'am" + (unread ? ` <em class="dot">${unread}</em>` : ""), "ask")}${it("badges", "🏅", "Badges", "badges")}${it("progress", myAvatar(), "Me", "progress")}</nav>`;
 }
 function header(title, back) {
   const s = S.session;
@@ -288,16 +315,18 @@ async function route() {
   const h = location.hash.slice(1) || "";
   const [page, a, b] = h.split("/");
   if (page === "install") return renderInstall();
+  if (page === "privacy") return renderPrivacy();
   if (!S.session) return renderLogin();
   if (S.session.role === "admin") {
     if (page === "lesson") return renderLesson(a, true);
     if (page === "ws") return renderWorksheet(a, b, true);
     if (page === "admin" && a === "report") return renderReport(b);
-    return renderAdmin(page === "admin" ? a || "students" : "students");
+    return renderAdmin(page === "admin" ? a || "dashboard" : "dashboard");
   }
   if (page === "lesson") return renderLesson(a);
   if (page === "ws") return renderWorksheet(a, b);
   if (page === "progress") return renderProgress();
+  if (page === "ask") return renderAsk(a);
   if (page === "games") return renderGames();
   if (page === "quiz") return renderQuickQuiz(+a || null);
   if (page === "match") return renderMatch(a);
@@ -337,25 +366,26 @@ function renderLogin(tab = "student") {
         <div class="err" id="loginErr"></div>
         <button class="btn primary big" type="submit">Log in <span lang="hi">/ लॉगिन करें</span></button>
       </form>
-      ${tab === "student" ? `<p class="hint center">Don't have an ID? Ask your teacher. <span lang="hi">आईडी नहीं है? अपनी टीचर से पूछें।</span></p>` : ""}
+      ${tab === "student" ? `<p class="hint center">Don't have an ID or forgot your password? <span lang="hi">आईडी नहीं है या पासवर्ड भूल गए?</span><br>${S.settings.phone ? `<a class="btn ghost sm" target="_blank" rel="noopener" href="${waLink(S.settings.phone, "Namaste Ma'am, I need help with my Learn from Pallavi Gupta login.")}">💬 Message Pallavi Ma'am on WhatsApp</a>` : "Ask your teacher."}</p>` : ""}
     </div>
-    <p class="credit">© ${new Date().getFullYear()} Learn from Pallavi Gupta · Produced by Pallavi Gupta</p>
+    <p class="credit">© ${new Date().getFullYear()} Learn from Pallavi Gupta · Produced by Pallavi Gupta<br><a href="#privacy">Privacy Policy</a> · <a href="#install">Install App</a> · v${APP_VERSION}</p>
   </div>`;
   $("#loginForm").onsubmit = async (e) => {
     e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector("button[type=submit]");
     btn.disabled = true; $("#loginErr").textContent = "";
     try {
       S.session = tab === "student" ? await S.db.studentLogin(f.get("id"), f.get("pw")) : await S.db.adminLogin(f.get("email") || "", f.get("pw"));
-      await loadData(); go(S.session.role === "admin" ? "admin/students" : ""); route();
+      await loadData(); go(S.session.role === "admin" ? "admin/dashboard" : ""); route();
     } catch (err) { $("#loginErr").textContent = friendly(err); btn.disabled = false; }
   };
 }
 window.renderLogin = renderLogin;
-window.doLogout = async () => { if (!confirm("Log out?")) return; await S.db.logout(); S.session = null; S.viewCls = null; S.results = []; go(""); route(); };
+window.doLogout = async () => { if (!confirm("Log out?")) return; await S.db.logout(); S.session = null; S.viewCls = null; S.results = []; S.doubts = []; go(""); route(); };
 
 async function loadData() {
   try { S.worksheets = await S.db.listWorksheets(); } catch { S.worksheets = []; }
   try { S.notices = await S.db.listNotices(); } catch { S.notices = []; }
+  if (S.session && S.session.role === "student") { try { S.doubts = await S.db.listDoubts(S.session.id); } catch { S.doubts = []; } }
   try { mergeLessons(await S.db.listLessons()); } catch { }
   if (S.session && S.session.role === "student") { try { S.results = await S.db.myResults(S.session.id); } catch { S.results = []; } }
 }
@@ -454,6 +484,7 @@ function renderLesson(id, adminView = false) {
         ${teacherWs.map(w => `<button class="ws-item teacher" onclick="go('ws/${t.id}/${w.id}')"><span>👩‍🏫</span><div><b>${esc(w.title)}</b><small>By Pallavi Ma'am${w.questions && w.questions.length ? ` · ${w.questions.length} questions` : ""}${w.link ? " · 📎 file" : ""}${w.image ? " · 🖼 sheet" : ""}</small></div>${stars(bestScoreFor(t.id, w.id))}</button>`).join("")}
       </div>
     </section>
+    ${adminView ? "" : `<button class="card ask-cta" onclick="go('ask/${t.id}')"><span>💬</span><div><b>Have a doubt about this topic?</b><small>Ask Pallavi Ma'am — <span lang="hi">मैम से पूछें</span></small></div><span>→</span></button>`}
     ${(() => { const list = LESSONS.filter(l => l.cls === t.cls); const i = list.findIndex(l => l.id === t.id); const pv = list[i - 1], nx = list[i + 1];
       return `<div class="lesson-nav">${pv ? `<button class="btn ghost" onclick="go('lesson/${pv.id}')">← ${esc(pv.title.en)}</button>` : "<span></span>"}${nx ? `<button class="btn primary" onclick="go('lesson/${nx.id}')">${esc(nx.title.en)} →</button>` : ""}</div>`; })()}
   </main>`;
@@ -536,17 +567,92 @@ function renderWorksheet(topicId, wsId, preview = false) {
 window.renderWorksheet = renderWorksheet;
 
 function renderProgress() {
-  const rs = [...S.results].sort((a, b) => b.at - a.at);
+  const st = S.session; const rs = [...S.results].sort((a, b) => b.at - a.at);
   const avg = rs.length ? Math.round(rs.reduce((s, r) => s + r.score / r.total, 0) / rs.length * 100) : 0;
-  app().innerHTML = header("My Progress") + `<main class="wrap has-nav">
+  const size = PREF.get("size", "m");
+  const cls = st.cls; const ts = LESSONS.filter(l => l.cls == cls); const passed = ts.filter(t => (bestScore(t.id) ?? 0) >= 60).length;
+  app().innerHTML = header("Me") + `<main class="wrap has-nav">
+    <section class="card me-card">
+      <button class="me-av" onclick="pickAvatar()" title="Change picture">${myAvatar()}<i>✏️</i></button>
+      <div><h2>${esc(st.name)}</h2><p>Class ${ordinal(cls)} · ID <code>${esc(st.id)}</code></p>
+      <div class="progress-strip"><div class="bar"><i style="width:${ts.length ? passed / ts.length * 100 : 0}%"></i></div><span>${passed}/${ts.length} passed</span></div></div>
+    </section>
     <div class="stats">
-      <div class="stat"><b>${rs.length}</b><span>Worksheets done</span></div>
+      <div class="stat"><b>${rs.length}</b><span>Worksheets & games</span></div>
       <div class="stat"><b>${avg}%</b><span>Average score</span></div>
-      <div class="stat"><b>${new Set(rs.map(r => r.topicId)).size}</b><span>Topics practised</span></div>
+      <div class="stat"><b>🔥 ${calcStreak()}</b><span>Day streak</span></div>
     </div>
-    <div class="card"><h3>Recent / हाल के</h3>
-    ${rs.length ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Topic</th><th>Score</th><th>When</th></tr>${rs.slice(0, 50).map(r => `<tr><td>${esc(r.topicTitle)}<small>${esc(r.wsTitle)}</small></td><td>${r.score}/${r.total}</td><td>${fmtDate(r.at)}</td></tr>`).join("")}</table></div>` : `<p class="hint">No worksheets yet. Open a topic and try its worksheet!</p>`}
-    </div></main>` + bottomNav("progress");
+    <div class="card"><h3>🔤 Text size <span lang="hi">अक्षरों का आकार</span></h3>
+      <div class="segwrap">${[["s", "A", ".85rem"], ["m", "A", "1rem"], ["l", "A", "1.2rem"], ["xl", "A", "1.4rem"]].map(([k, l, f]) => `<button class="seg ${size === k ? "on" : ""}" style="font-size:${f}" onclick="setSize('${k}')">${l}</button>`).join("")}</div></div>
+    <div class="card"><h3>📈 Recent work <span lang="hi">हाल का काम</span></h3>
+    ${rs.length ? `<div class="tbl-wrap"><table class="tbl"><tr><th>Topic</th><th>Score</th><th>When</th></tr>${rs.slice(0, 30).map(r => `<tr><td>${esc(r.topicTitle)}<small>${esc(r.wsTitle)}</small></td><td class="${pctOf(r) >= .6 ? "ok" : "lo"}">${r.score}/${r.total}</td><td>${fmtDate(r.at)}</td></tr>`).join("")}</table></div>` : `<p class="hint">No worksheets yet. Open a topic and try its worksheet!</p>`}
+    </div>
+    <div class="card menu-list">
+      <button onclick="go('badges')">🏅 My badges & certificate<span>→</span></button>
+      <button onclick="go('ask')">💬 My questions to Ma'am<span>→</span></button>
+      ${S.settings.phone ? `<a target="_blank" rel="noopener" href="${waLink(S.settings.phone, `Namaste Ma'am, this is ${st.name} (Class ${cls}).`)}">📞 Contact Pallavi Ma'am (WhatsApp)<span>→</span></a>` : ""}
+      ${isInstalled() ? "" : `<button onclick="go('install')">📲 Install the app<span>→</span></button>`}
+      <button onclick="shareApp()">📤 Share app with friends<span>→</span></button>
+      <button onclick="go('privacy')">🔒 Privacy Policy<span>→</span></button>
+      <button class="danger-t" onclick="doLogout()">⎋ Log out<span></span></button>
+    </div>
+    <p class="credit">Learn from Pallavi Gupta · v${APP_VERSION}</p>
+  </main>` + bottomNav("progress");
+}
+window.setSize = (k) => { PREF.set("size", k); applyTextSize(); renderProgress(); };
+window.pickAvatar = () => {
+  modal(`<h3>Choose your picture <span lang="hi">अपनी तस्वीर चुनो</span></h3><div class="av-grid">${AVATARS.map(a => `<button onclick="setAvatar('${a}')">${a}</button>`).join("")}</div>`);
+};
+window.setAvatar = (a) => { PREF.set("avatar_" + S.session.id, a); $$(".modal").forEach(m => m.remove()); renderProgress(); };
+
+/* ===================== ASK MA'AM (doubts) ===================== */
+async function renderAsk(topicId) {
+  const st = S.session;
+  try { S.doubts = await S.db.listDoubts(st.id); } catch { }
+  const mine = [...(S.doubts || [])].sort((a, b) => b.at - a.at);
+  mine.forEach(d => { if (d.answer) PREF.set("seen_" + d.id, "1"); });
+  const opts = LESSONS.filter(l => l.cls == st.cls).map(l => `<option value="${l.id}" ${l.id === topicId ? "selected" : ""}>${esc(l.title.en)}</option>`).join("");
+  app().innerHTML = header("Ask Pallavi Ma'am") + `<main class="wrap has-nav">
+    <div class="card ask-head">${teacherAvatar(56)}<div><b>Ask your doubt</b><small>Write in English or Hindi. Ma'am will reply here. <span lang="hi">अपना सवाल लिखो, मैम यहीं जवाब देंगी।</span></small></div></div>
+    <form id="askF" class="card">
+      <label>Topic<select name="topicId"><option value="">— General question —</option>${opts}</select></label>
+      <label>Your question <span lang="hi">/ आपका सवाल</span><textarea name="text" rows="3" required maxlength="600" placeholder="e.g. When do we use 'an' before 'h'?"></textarea></label>
+      <button class="btn primary big" type="submit">Send to Ma'am 📨</button>
+    </form>
+    <h3>My questions (${mine.length})</h3>
+    ${mine.length ? mine.map(d => `<div class="card doubt ${d.answer ? "answered" : ""}">
+      <div class="d-meta">${d.topicTitle ? esc(d.topicTitle) + " · " : ""}${fmtDate(d.at)}</div>
+      <div class="d-q">❓ ${esc(d.text)}</div>
+      ${d.answer ? `<div class="d-a"><div class="d-who">${teacherAvatar(28)}<b>Pallavi Ma'am</b><small>${fmtDate(d.answeredAt)}</small></div>${esc(d.answer)}</div>` : `<div class="d-wait">⏳ Waiting for Ma'am's reply</div>`}
+    </div>`).join("") : `<p class="hint">No questions yet. Don't be shy — ask anything! <span lang="hi">कोई भी सवाल पूछो!</span></p>`}
+  </main>` + bottomNav("ask");
+  $("#askF").onsubmit = async (e) => {
+    e.preventDefault(); const f = new FormData(e.target); const btn = e.target.querySelector("[type=submit]"); btn.disabled = true;
+    const t = LESSONS.find(l => l.id === f.get("topicId"));
+    try {
+      await S.db.addDoubt({ studentId: st.id, studentName: st.name, cls: st.cls, topicId: t ? t.id : "", topicTitle: t ? t.title.en : "", text: f.get("text").trim(), answer: "" });
+      toast("Sent! Ma'am will reply soon 😊", "good"); renderAsk();
+    } catch (err) { toast(err, "bad"); btn.disabled = false; }
+  };
+}
+
+/* ===================== PRIVACY ===================== */
+function renderPrivacy() {
+  app().innerHTML = header("Privacy Policy", S.session ? "history.back()" : "go('')") + `<main class="wrap"><div class="card legal">
+    <h2>Privacy Policy</h2><p class="hint">Learn from Pallavi Gupta · Last updated: ${new Date(2026, 10, 19).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}</p>
+    <p>This app is an English grammar learning app for students of Class 1 to 5, run by Pallavi Gupta (the teacher). We care about children's privacy and collect only what is needed for learning.</p>
+    <h3>What we collect</h3><ul>
+      <li><b>Student account:</b> name, class, login ID and password. These are created by the teacher. Students cannot sign up themselves.</li>
+      <li><b>Learning activity:</b> worksheet and game scores, with the date and time, so students and the teacher can see progress.</li>
+      <li><b>Questions to the teacher:</b> doubts that students send in the app, and the teacher's replies.</li>
+      <li><b>Parent phone number (optional):</b> added by the teacher only to share login details or report cards on WhatsApp.</li></ul>
+    <h3>What we do NOT collect</h3><ul><li>No location, contacts, photos or files from the phone.</li><li>No advertising and no tracking for ads.</li><li>We do not sell or share data with anyone.</li></ul>
+    <h3>Microphone</h3><p>The optional "Speak English" game uses the phone's built-in speech recognition only while the 🎤 button is pressed. Nothing is recorded or stored by the app.</p>
+    <h3>Where data is stored</h3><p>Data is stored securely in Google Firebase (or only on the device in demo mode). Only the teacher can see all students' data. Each student can see only their own.</p>
+    <h3>Deleting data</h3><p>Parents can ask the teacher at any time to delete a student's account and data.</p>
+    <h3>Contact</h3><p>Pallavi Gupta${S.settings.phone ? ` · WhatsApp: <a target="_blank" rel="noopener" href="${waLink(S.settings.phone, "Privacy question about Learn from Pallavi Gupta app")}">message the teacher</a>` : ""}</p>
+    <p lang="hi" class="hint">यह ऐप बच्चों की निजता का ध्यान रखता है। हम केवल पढ़ाई के लिए ज़रूरी जानकारी रखते हैं, कोई विज्ञापन नहीं दिखाते और किसी के साथ डेटा साझा नहीं करते।</p>
+  </div></main>`;
 }
 
 /* ===================== STREAK, WORD, BADGES ===================== */
@@ -772,13 +878,16 @@ window.speak = speak;
 
 /* ===================== ADMIN ===================== */
 async function renderAdmin(tab) {
-  const tabs = [["students", "👥 Students"], ["worksheets", "📝 Worksheets"], ["notices", "📢 Notices"], ["results", "📊 Results"], ["content", "📚 Lessons"], ["settings", "⚙️ Settings"]];
+  let pending = 0; try { pending = (await S.db.listDoubts()).filter(d => !d.answer).length; } catch { }
+  const tabs = [["dashboard", "🏠 Dashboard"], ["doubts", "💬 Doubts" + (pending ? ` <em class="dot">${pending}</em>` : "")], ["students", "👥 Students"], ["worksheets", "📝 Worksheets"], ["notices", "📢 Notices"], ["results", "📊 Results"], ["content", "📚 Lessons"], ["settings", "⚙️ Settings"]];
   app().innerHTML = header("Admin Panel") + `<main class="wrap admin">
     <nav class="admin-tabs">${tabs.map(([k, l]) => `<button class="${k === tab ? "on" : ""}" onclick="go('admin/${k}')">${l}</button>`).join("")}</nav>
     <div id="adminBody"><p class="hint center">Loading…</p></div></main>`;
   const body = $("#adminBody");
   try {
-    if (tab === "students") await adminStudents(body);
+    if (tab === "dashboard") await adminDashboard(body);
+    else if (tab === "doubts") await adminDoubts(body);
+    else if (tab === "students") await adminStudents(body);
     else if (tab === "worksheets") await adminWorksheets(body);
     else if (tab === "results") await adminResults(body);
     else if (tab === "notices") await adminNotices(body);
@@ -786,6 +895,53 @@ async function renderAdmin(tab) {
     else adminSettings(body);
   } catch (e) { body.innerHTML = `<div class="card err">⚠️ ${esc(friendly(e))}</div>`; }
 }
+
+async function adminDashboard(body) {
+  const [stu, rs, doubts] = await Promise.all([S.db.listStudents(), S.db.allResults(), S.db.listDoubts().catch(() => [])]);
+  const today = dayKey(Date.now()); const weekAgo = Date.now() - 7 * 864e5;
+  const todayRs = rs.filter(r => dayKey(r.at) === today); const weekRs = rs.filter(r => r.at >= weekAgo);
+  const activeToday = new Set(todayRs.map(r => r.studentId)).size;
+  const weekAvg = weekRs.length ? Math.round(weekRs.reduce((a, r) => a + pctOf(r), 0) / weekRs.length * 100) : 0;
+  const pend = doubts.filter(d => !d.answer);
+  const per = {}; rs.forEach(r => (per[r.studentId] ||= []).push(r));
+  const rows = stu.filter(s => !s.disabled).map(s => { const r = per[s.id] || []; const w = r.filter(x => x.at >= weekAgo);
+    return { s, last: r.length ? Math.max(...r.map(x => x.at)) : 0, avg: r.length ? Math.round(r.reduce((a, x) => a + pctOf(x), 0) / r.length * 100) : null, week: w.length, stars: w.filter(x => pctOf(x) >= .9).length }; });
+  const top = [...rows].filter(r => r.week).sort((a, b) => b.week + b.stars - (a.week + a.stars)).slice(0, 5);
+  const attention = rows.filter(r => !r.last || r.last < weekAgo || (r.avg != null && r.avg < 50)).slice(0, 8);
+  const hour = new Date().getHours();
+  body.innerHTML = `
+  <div class="card dash-hello">${teacherAvatar(56)}<div><h2>Good ${hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening"}, Pallavi Ma'am! 👋</h2><p>${new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</p></div></div>
+  ${S.db.mode === "demo" ? `<div class="card warn-box"><b>⚠️ Demo mode:</b> logins and scores are saved only on this device, so students cannot log in from their own phones yet. Connect Firebase to go live (see README, Step 2).</div>` : ""}
+  <div class="stats four">
+    <div class="stat"><b>${stu.length}</b><span>Students</span></div>
+    <div class="stat"><b>${activeToday}</b><span>Active today</span></div>
+    <div class="stat"><b>${weekRs.length}</b><span>Done this week</span></div>
+    <div class="stat"><b>${weekAvg}%</b><span>Avg this week</span></div>
+  </div>
+  ${pend.length ? `<button class="card ask-cta" onclick="go('admin/doubts')"><span>💬</span><div><b>${pend.length} student question${pend.length > 1 ? "s" : ""} waiting</b><small>Tap to reply</small></div><span>→</span></button>` : ""}
+  <div class="card"><h3>⚡ Quick actions</h3><div class="quick">
+    <button onclick="go('admin/students')">👤<span>Add student</span></button><button onclick="go('admin/worksheets')">📝<span>Add worksheet</span></button>
+    <button onclick="go('admin/notices')">📢<span>Post homework</span></button><button onclick="go('admin/content')">📚<span>Add lesson</span></button>
+    <button onclick="copyLink(location.origin + location.pathname + '#install')">📲<span>Copy app link</span></button><button onclick="go('admin/results')">📄<span>Report cards</span></button></div></div>
+  <div class="dash-grid">
+    <div class="card"><h3>🏆 Top this week</h3>${top.length ? top.map((r, i) => `<div class="lb-row" onclick="go('admin/report/${r.s.id}')"><span class="rank">${["🥇", "🥈", "🥉", "4", "5"][i]}</span><b>${esc(r.s.name)}</b><small>Class ${r.s.cls} · ${r.week} done · ${r.stars} ⭐</small></div>`).join("") : `<p class="hint">No activity this week yet.</p>`}</div>
+    <div class="card"><h3>🔔 Needs attention</h3>${attention.length ? attention.map(r => `<div class="lb-row" onclick="go('admin/report/${r.s.id}')"><span class="rank">${!r.last ? "💤" : r.last < weekAgo ? "⏰" : "📉"}</span><b>${esc(r.s.name)}</b><small>${!r.last ? "Not started yet" : r.last < weekAgo ? "Inactive since " + fmtDate(r.last) : "Average " + r.avg + "%"}</small></div>`).join("") : `<p class="hint">Everyone is doing well 🎉</p>`}</div>
+  </div>
+  <div class="card"><h3>🕒 Recent activity</h3>${rs.length ? [...rs].sort((a, b) => b.at - a.at).slice(0, 10).map(r => `<div class="act"><b>${esc(r.studentName)}</b> — ${esc(r.topicTitle)} <span class="${pctOf(r) >= .6 ? "ok" : "lo"}">${r.score}/${r.total}</span><small>${fmtDate(r.at)}</small></div>`).join("") : `<p class="hint">No activity yet. Share the app link with your students!</p>`}</div>`;
+}
+async function adminDoubts(body) {
+  const all = (await S.db.listDoubts()).sort((a, b) => (!!a.answer - !!b.answer) || b.at - a.at);
+  body.innerHTML = `<div class="card"><h3>💬 Student questions (${all.filter(d => !d.answer).length} waiting)</h3><p class="hint">Students ask from the "Ask Ma'am" tab or from any lesson. Your reply appears in their app.</p></div>
+  ${all.length ? all.map(d => `<div class="card doubt ${d.answer ? "answered" : ""}">
+    <div class="d-meta"><b>${esc(d.studentName)}</b> · Class ${d.cls}${d.topicTitle ? " · " + esc(d.topicTitle) : ""} · ${fmtDate(d.at)}</div>
+    <div class="d-q">❓ ${esc(d.text)}</div>
+    ${d.answer ? `<div class="d-a">${esc(d.answer)}</div>` : ""}
+    <div class="reply"><textarea rows="2" placeholder="${d.answer ? "Edit your reply…" : "Type your reply (English / Hindi)…"}" id="r-${d.id}">${esc(d.answer || "")}</textarea>
+    <div class="row"><button class="btn primary sm" onclick="replyDoubt('${d.id}')">${d.answer ? "Update reply" : "Send reply"}</button>${d.topicId ? `<button class="btn ghost sm" onclick="go('lesson/${d.topicId}')">Open lesson</button>` : ""}<button class="btn danger sm" onclick="delDoubt('${d.id}')">🗑</button></div></div>
+  </div>`).join("") : `<p class="hint center">No questions yet.</p>`}`;
+}
+window.replyDoubt = async (id) => { const v = $("#r-" + id).value.trim(); if (!v) return toast("Write a reply first", "bad"); try { await S.db.answerDoubt(id, v); toast("Reply sent ✅", "good"); route(); } catch (e) { toast(e, "bad"); } };
+window.delDoubt = async (id) => { if (!confirm("Delete this question?")) return; try { await S.db.deleteDoubt(id); route(); } catch (e) { toast(e, "bad"); } };
 
 async function adminStudents(body) {
   const list = await S.db.listStudents();
@@ -1050,16 +1206,22 @@ function adminSettings(body) {
   <div class="card"><h3>👩‍🏫 Teacher photo & welcome note</h3>
     <div class="row">${teacherAvatar(90)}<label class="btn ghost">Upload photo<input type="file" accept="image/*" id="photoIn" hidden></label>${S.settings.photo ? `<button class="btn ghost" id="rmPhoto">Use default photo</button>` : ""}</div>
     <label>Welcome note on login screen<textarea id="welcome" rows="2" placeholder="Welcome to my grammar class!">${esc(S.settings.welcome || "")}</textarea></label>
+    <label>Your WhatsApp number (for "Forgot password" & parent contact)<input id="tPhone" inputmode="tel" placeholder="9876543210" value="${esc(S.settings.phone || "")}"></label>
     <button class="btn primary" id="saveWel">Save</button>
   </div>
   ${demo ? `<div class="card"><h3>🔐 Admin password (demo mode)</h3><label>New password<input id="newAdm" type="password" minlength="4"></label><button class="btn primary" id="saveAdm">Change password</button></div>` : `<div class="card"><h3>🔐 Admin account</h3><p class="hint">Change the admin password in Firebase console → Authentication → Users.</p></div>`}
   <div class="card"><h3>📲 Install / share</h3><p>Send this link to parents. They open it on the phone and tap <b>Install</b> (Android) or <b>Share → Add to Home Screen</b> (iPhone).</p>
     <pre class="cred">${esc(location.origin + location.pathname)}</pre><div class="row"><button class="btn ghost" onclick="go('install')">📲 Install page</button><button class="btn ghost" onclick="copyLink(location.origin + location.pathname + '#install')">📋 Copy install link</button><button class="btn primary" onclick="shareApp()">Share on WhatsApp</button></div>
     <p class="hint">Tip: send the <b>install link</b> (ends with #install). It opens straight on the install steps for that phone.</p></div>
-  <div class="card"><h3>ℹ️ Status</h3><p>Mode: <b>${demo ? "Demo (this device only)" : "Cloud (Firebase) — syncs on all devices"}</b></p><p>Lessons: ${LESSONS.length} topics · Classes 1–5</p></div>`;
+  ${demo ? `<div class="card"><h3>💾 Backup & restore</h3><p class="hint">In demo mode all data lives in this browser. Download a backup regularly, or before changing phone/computer.</p>
+    <div class="row"><button class="btn ghost" id="bkExport">⬇️ Download backup</button><label class="btn ghost">⬆️ Restore backup<input type="file" id="bkImport" accept="application/json,.json" hidden></label></div></div>`
+    : `<div class="card"><h3>💾 Backup</h3><p class="hint">Your data is stored safely in Firebase. Use Results → "Download (Excel)" for a copy of all scores.</p></div>`}
+  <div class="card"><h3>ℹ️ Status</h3><p>Mode: <b>${demo ? "Demo (this device only)" : "Cloud (Firebase) — syncs on all devices"}</b></p><p>Lessons: ${LESSONS.length} topics · Classes 1–5 · App v${APP_VERSION}</p><p><a href="#privacy">Privacy Policy</a> (link this in the Play Store listing)</p></div>`;
   $("#photoIn").onchange = async (e) => { const f = e.target.files[0]; if (!f) return; try { const p = await resizeImage(f, 300, 0.8); await S.db.saveSettings({ photo: p }); S.settings.photo = p; toast("Photo saved", "good"); route(); } catch (err) { toast(err, "bad"); } };
   const rm = $("#rmPhoto"); if (rm) rm.onclick = async () => { try { await S.db.saveSettings({ photo: "" }); S.settings.photo = ""; route(); } catch (err) { toast(err, "bad"); } };
-  $("#saveWel").onclick = async () => { try { const w = $("#welcome").value.trim(); await S.db.saveSettings({ welcome: w }); S.settings.welcome = w; toast("Saved", "good"); } catch (err) { toast(err, "bad"); } };
+  $("#saveWel").onclick = async () => { try { const w = $("#welcome").value.trim(); const ph = $("#tPhone").value.replace(/\D/g, "").slice(-10); await S.db.saveSettings({ welcome: w, phone: ph }); S.settings.welcome = w; S.settings.phone = ph; toast("Saved", "good"); } catch (err) { toast(err, "bad"); } };
+  const ex = $("#bkExport"); if (ex) ex.onclick = () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(S.db.exportAll(), null, 1)], { type: "application/json" })); a.download = `pallavi-app-backup-${new Date().toISOString().slice(0, 10)}.json`; a.click(); toast("Backup downloaded", "good"); };
+  const im = $("#bkImport"); if (im) im.onchange = async (e) => { const f = e.target.files[0]; if (!f) return; try { const o = JSON.parse(await f.text()); if (!confirm("Restore this backup? Current data on this device will be replaced.")) return; S.db.importAll(o); toast("Backup restored", "good"); setTimeout(() => location.reload(), 600); } catch { toast("This is not a valid backup file", "bad"); } };
   const sa = $("#saveAdm"); if (sa) sa.onclick = async () => { const p = $("#newAdm").value; if (p.length < 4) return toast("At least 4 characters", "bad"); await S.db.saveSettings({ adminPassword: p }); S.settings.adminPassword = p; toast("Admin password changed", "good"); };
 }
 
@@ -1164,12 +1326,14 @@ window.renderInstall = renderInstall;
 
 /* ===================== START ===================== */
 (async function start() {
+  applyTextSize();
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => { });
   S.db = window.FIREBASE_CONFIG ? new FireDB(window.FIREBASE_CONFIG) : new LocalDB();
   try { await S.db.init(); } catch (e) {
     app().innerHTML = `<div class="wrap"><div class="card err">Could not connect to the server. Check internet and refresh.<br><small>${esc(friendly(e))}</small></div><button class="btn primary" onclick="location.reload()">🔄 Retry</button></div>`; return;
   }
   try { S.settings = await S.db.getSettings() || {}; } catch { S.settings = {}; }
+  if (!S.settings.phone && window.TEACHER_PHONE) S.settings.phone = String(window.TEACHER_PHONE);
   S.session = await S.db.restoreSession();
   if (S.session) await loadData();
   route();

@@ -33,6 +33,12 @@ service cloud.firestore {
       allow read: if signedIn();
       allow write: if isAdmin();
     }
+    // Student questions ("Ask Ma'am") — student creates & reads own; admin replies
+    match /doubts/{doubtId} {
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
     // Worksheet scores — student saves own score; admin sees all
     match /results/{resultId} {
       allow create: if signedIn() && request.resource.data.uid == request.auth.uid;

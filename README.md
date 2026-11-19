@@ -32,7 +32,14 @@ It works on **Android and iPhone**: students open a link once and install it on 
 - 🎓 **Printable certificate**, signed by Pallavi Gupta, when a student scores 60% or more in every topic of their class.
 - 📢 **Notices and homework** from the teacher appear at the top of the home screen, with a due date and a button that opens the linked topic.
 
+- 💬 **Ask Ma'am:** students send a doubt (from any lesson or the Ask tab) and see the teacher's reply in the app, with a red dot when there's a new reply.
+- 👤 **Me page:** choose a profile picture, change the text size (4 sizes, good for young children), see progress, contact the teacher on WhatsApp, share the app, read the Privacy Policy.
+- 📞 **Forgot password?** button on the login screen opens WhatsApp to the teacher (7006181540, set in `firebase-config.js`, can be changed in Admin → Settings).
+
 **For admin (Pallavi Ma'am)**
+- 🏠 **Dashboard** (first screen after login): today's activity, this week's average, the top 5 students, students who need attention (inactive, not started or low scores), recent activity and quick-action buttons.
+- 💬 **Doubts inbox:** reply to student questions. A red number shows how many are waiting.
+- 💾 **Backup & restore** (demo mode) in Settings.
 - **Students:** create a Login ID and password (🎲 makes a password for you), send the login to parents on WhatsApp, change a password or class, pause a login or delete a student.
 - **Worksheets:** add a worksheet to any class and topic. It can have auto-checked questions (multiple choice, fill in the blank, true/false), a photo or scan of a paper worksheet, and/or a Google Drive PDF link.
 - **Add many students at once:** paste a list in the form `Name, Class, LoginID, Password`.
@@ -122,6 +129,9 @@ Open `content.js`. Each topic looks like this:
 ```
 
 To add a topic, copy one block, give it a new `id`, and set `cls` to the class number. Teacher worksheets added through the Admin panel need **no** code changes.
+
+## Privacy Policy
+The app has a built-in Privacy Policy at `your-site/#privacy` (linked on the login screen). Use this link when publishing to the Google Play Store.
 
 ## Notes
 - Student passwords are kept so the admin can see them and share them again. Only the admin and that student can read them.

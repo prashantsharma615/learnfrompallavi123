@@ -1,7 +1,7 @@
 // Offline support: lessons open even without internet (login & syncing still need internet).
-const CACHE = "lpg-v8";
+const CACHE = "lpg-v9";
 const SHELL = ["./", "./index.html", "./style.css", "./app.js", "./content.js", "./firebase-config.js", "./manifest.json",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./icons/pallavi.jpg"];
+  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/apple-touch-icon.png", "./icons/pallavi.jpg", "./icons/og-image.jpg"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
   e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))));

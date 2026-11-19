@@ -21,3 +21,7 @@ window.ADMIN_EMAIL = "admin@learnfrompallavi.app";
 
 // Student IDs are turned into hidden login emails using this domain (no real email is needed).
 window.STUDENT_EMAIL_DOMAIN = "students.learnfrompallavi.app";
+
+// Teacher's WhatsApp number (used for "Forgot password?" and "Contact Ma'am" buttons).
+// Can be changed later from Admin → Settings.
+window.TEACHER_PHONE = "7006181540";
