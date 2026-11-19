@@ -10,7 +10,7 @@ It works on **Android and iPhone**: students open a link once and install it on 
 ## What's inside
 
 **For students**
-- **52 grammar topics** (Class 1 to 5, 10–12 topics per class) with **267 auto-checked worksheet questions**. Each one has an explanation, rules, examples and Pallavi Ma'am's tip.
+- **72 grammar topics** (Class 1 to 5, 13–17 topics per class) with **370 auto-checked worksheet questions**, including writing skills: picture composition, paragraph, leave application, informal letter and notice writing. Each one has an explanation, rules, examples and Pallavi Ma'am's tip.
 - A switch on every lesson to show **English / हिंदी / Both**.
 - 🔊 Read-aloud button on every line, in both English and Hindi voices.
 - A built-in practice worksheet for every topic, plus worksheets the teacher adds. Answers are checked instantly and students earn ⭐ stars.
