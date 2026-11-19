@@ -84,14 +84,19 @@ The yellow "Demo mode" bar will disappear. From now on, every student account, w
 
 > The free Firebase "Spark" plan is plenty for hundreds of students.
 
-## Step 3 — Install on phones
+## Step 3 — Install on phones (easy for everyone)
 
-Send the Netlify link to parents. You can use the 📤 WhatsApp button in Admin → Students.
+Share the **install link**, which is your website address followed by `#install`. For example:
+`https://your-site.vercel.app/#install`
 
-- **Android (Chrome):** open the link → tap **⋮ menu → Install app** (or tap "Install this app" on the login screen).
-- **iPhone/iPad (Safari):** open the link → tap **Share (□↑) → Add to Home Screen → Add**.
+You can share it from Admin → Settings ("Copy install link" / "Share on WhatsApp"). Every login you share from Admin → Students also includes it.
 
-The app gets its own icon and opens full-screen like any other app. Lessons that have already been opened also work without internet.
+The install page detects the phone and shows the right steps:
+- **Android (Chrome):** a big **"Install now — one tap"** button. If the link was opened inside WhatsApp or Instagram, an **"Open in Chrome"** button switches to Chrome first.
+- **iPhone / iPad:** picture steps (Share → Add to Home Screen → Add) with an arrow pointing to the Share button. If the link was opened in Chrome, WhatsApp or Instagram on an iPhone, the page asks the user to open it in **Safari** and gives a "Copy link" button.
+- **Computer:** a QR code to scan with the phone camera.
+
+There is also an orange **Install App** button on the login screen and an install reminder at the top of the home screen. The reminder can be closed and comes back after 3 days. Once the app is installed, these buttons disappear.
 
 ## Step 4 (optional) — Publish on Google Play Store / Apple App Store
 

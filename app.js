@@ -287,6 +287,7 @@ async function route() {
   if ("speechSynthesis" in window) speechSynthesis.cancel();
   const h = location.hash.slice(1) || "";
   const [page, a, b] = h.split("/");
+  if (page === "install") return renderInstall();
   if (!S.session) return renderLogin();
   if (S.session.role === "admin") {
     if (page === "lesson") return renderLesson(a, true);
@@ -320,6 +321,7 @@ function renderLogin(tab = "student") {
       <p class="sub">English Grammar · Class 1 to 5<br><span lang="hi">अंग्रेज़ी व्याकरण — हिंदी और अंग्रेज़ी में</span></p>
       ${S.settings.welcome ? `<p class="welcome">${esc(S.settings.welcome)}</p>` : ""}
     </div>
+    ${isInstalled() ? "" : `<button class="install-cta" onclick="doInstall()"><img src="icons/icon-192.png" alt=""><span><b>Install App</b><small>${DEV.ios ? "iPhone / iPad" : DEV.android ? "Android · one tap" : "Android & iPhone"} · ऐप इंस्टॉल करें</small></span><i>📲</i></button>`}
     <div class="card login-card">
       <div class="tabs">
         <button class="tab ${tab === "student" ? "on" : ""}" onclick="renderLogin('student')">🎒 Student</button>
@@ -337,7 +339,6 @@ function renderLogin(tab = "student") {
       </form>
       ${tab === "student" ? `<p class="hint center">Don't have an ID? Ask your teacher. <span lang="hi">आईडी नहीं है? अपनी टीचर से पूछें।</span></p>` : ""}
     </div>
-    <button class="install-link" onclick="showInstall()">📲 Install this app on your phone</button>
     <p class="credit">© ${new Date().getFullYear()} Learn from Pallavi Gupta · Produced by Pallavi Gupta</p>
   </div>`;
   $("#loginForm").onsubmit = async (e) => {
@@ -397,6 +398,7 @@ function renderHome() {
   const streak = calcStreak(); const wd = wordOfDay();
   app().innerHTML = header("Learn from Pallavi Gupta") + `
   <main class="wrap has-nav">
+    ${installBar()}
     <section class="hello">
       <div><h2>Hello, ${esc(s.name.split(" ")[0])}! 👋</h2>
       <p lang="hi">नमस्ते! आज क्या सीखें?</p></div>
@@ -849,7 +851,7 @@ async function adminStudents(body) {
 window.filterRows = (inp, sel) => { const q = inp.value.toLowerCase(); $$(sel + " tr").slice(1).forEach(r => r.style.display = r.textContent.toLowerCase().includes(q) ? "" : "none"); };
 window.shareLogin = (d, justCreated) => {
   const url = location.origin + location.pathname;
-  const text = `Learn from Pallavi Gupta 📚\nStudent: ${d.n}\nLogin ID: ${d.i}\nPassword: ${d.p}\nOpen app: ${url}`;
+  const text = `Learn from Pallavi Gupta 📚\nStudent: ${d.n}\nLogin ID: ${d.i}\nPassword: ${d.p}\nInstall the app: ${url}#install`;
   modal(`<h3>${justCreated ? "✅ Login created" : "Login details"}</h3><pre class="cred">${esc(text)}</pre>
     <div class="row"><button class="btn ghost" id="cpy">📋 Copy</button>
     <a class="btn primary" target="_blank" rel="noopener" href="https://wa.me/${d.ph ? "91" + d.ph.replace(/\D/g, "").slice(-10) : ""}?text=${encodeURIComponent(text)}">WhatsApp</a></div>`);
@@ -1052,7 +1054,8 @@ function adminSettings(body) {
   </div>
   ${demo ? `<div class="card"><h3>🔐 Admin password (demo mode)</h3><label>New password<input id="newAdm" type="password" minlength="4"></label><button class="btn primary" id="saveAdm">Change password</button></div>` : `<div class="card"><h3>🔐 Admin account</h3><p class="hint">Change the admin password in Firebase console → Authentication → Users.</p></div>`}
   <div class="card"><h3>📲 Install / share</h3><p>Send this link to parents. They open it on the phone and tap <b>Install</b> (Android) or <b>Share → Add to Home Screen</b> (iPhone).</p>
-    <pre class="cred">${esc(location.origin + location.pathname)}</pre><button class="btn ghost" onclick="showInstall()">How to install</button></div>
+    <pre class="cred">${esc(location.origin + location.pathname)}</pre><div class="row"><button class="btn ghost" onclick="go('install')">📲 Install page</button><button class="btn ghost" onclick="copyLink(location.origin + location.pathname + '#install')">📋 Copy install link</button><button class="btn primary" onclick="shareApp()">Share on WhatsApp</button></div>
+    <p class="hint">Tip: send the <b>install link</b> (ends with #install). It opens straight on the install steps for that phone.</p></div>
   <div class="card"><h3>ℹ️ Status</h3><p>Mode: <b>${demo ? "Demo (this device only)" : "Cloud (Firebase) — syncs on all devices"}</b></p><p>Lessons: ${LESSONS.length} topics · Classes 1–5</p></div>`;
   $("#photoIn").onchange = async (e) => { const f = e.target.files[0]; if (!f) return; try { const p = await resizeImage(f, 300, 0.8); await S.db.saveSettings({ photo: p }); S.settings.photo = p; toast("Photo saved", "good"); route(); } catch (err) { toast(err, "bad"); } };
   const rm = $("#rmPhoto"); if (rm) rm.onclick = async () => { try { await S.db.saveSettings({ photo: "" }); S.settings.photo = ""; route(); } catch (err) { toast(err, "bad"); } };
@@ -1067,16 +1070,97 @@ function modal(html) {
   m.onclick = (e) => { if (e.target === m) m.remove(); };
   document.body.appendChild(m);
 }
+/* ---------- INSTALL (Android + iPhone + computer) ---------- */
 let deferredPrompt = null;
-window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; });
-window.showInstall = async () => {
-  if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; return; }
-  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-  modal(`<h3>📲 Install the app</h3>
-  ${ios ? "" : `<h4>Android (Chrome)</h4><ol><li>Open this link in <b>Chrome</b>.</li><li>Tap the <b>⋮ menu</b> → <b>Install app</b> / <b>Add to Home screen</b>.</li></ol>`}
-  <h4>iPhone / iPad (Safari)</h4><ol><li>Open this link in <b>Safari</b>.</li><li>Tap the <b>Share</b> button (□↑).</li><li>Choose <b>Add to Home Screen</b> → <b>Add</b>.</li></ol>
-  <p lang="hi">ऐप होम स्क्रीन पर आ जाएगा और बाकी ऐप्स की तरह खुलेगा।</p>`);
+const UA = navigator.userAgent;
+const DEV = {
+  ios: /iphone|ipad|ipod/i.test(UA) || (/Macintosh/.test(UA) && navigator.maxTouchPoints > 1),
+  android: /android/i.test(UA),
+  inApp: /FBAN|FBAV|FB_IAB|Instagram|WhatsApp|Line\/|Snapchat|Twitter|LinkedInApp|; wv\)/i.test(UA),
 };
+DEV.iosSafari = DEV.ios && /Safari/i.test(UA) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(UA) && !DEV.inApp;
+DEV.mobile = DEV.ios || DEV.android;
+const isInstalled = () => window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+const appUrl = () => location.origin + location.pathname;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); deferredPrompt = e; $$(".one-tap").forEach(b => b.hidden = false); });
+window.addEventListener("appinstalled", () => { deferredPrompt = null; try { localStorage.setItem("lpg_installed", "1"); } catch { } confetti(); toast("App installed! Find it on your home screen 🎉", "good"); if (location.hash === "#install") renderInstall(); });
+
+window.doInstall = async () => {
+  if (deferredPrompt) {
+    deferredPrompt.prompt(); const c = await deferredPrompt.userChoice; deferredPrompt = null;
+    if (c && c.outcome === "accepted") toast("Installing… ✅", "good");
+    return;
+  }
+  go("install");
+};
+window.showInstall = () => window.doInstall();
+window.copyLink = async (u) => {
+  u = u || appUrl();
+  try { await navigator.clipboard.writeText(u); toast("Link copied — paste it in Chrome / Safari", "good"); }
+  catch { prompt("Copy this link:", u); }
+};
+window.shareApp = async () => {
+  const data = { title: "Learn from Pallavi Gupta", text: "English Grammar app (Class 1–5) in English & Hindi. Install it free:", url: appUrl() + "#install" };
+  if (navigator.share) { try { await navigator.share(data); } catch { } }
+  else window.open("https://wa.me/?text=" + encodeURIComponent(data.text + " " + data.url), "_blank");
+};
+window.dismissInstallBar = () => { try { localStorage.setItem("lpg_hideInstall", Date.now()); } catch { } const b = $(".install-bar"); if (b) b.remove(); };
+function installBar() {
+  if (isInstalled()) return "";
+  let hid = 0; try { hid = +localStorage.getItem("lpg_hideInstall") || 0; } catch { }
+  if (Date.now() - hid < 3 * 864e5) return "";
+  return `<div class="install-bar"><img src="icons/icon-192.png" alt=""><div><b>Install the app</b><small>${DEV.ios ? "Add to your iPhone home screen" : "One tap · works offline · free"}</small></div>
+    <button class="btn primary sm" onclick="doInstall()">Install</button><button class="x" aria-label="Close" onclick="dismissInstallBar()">✕</button></div>`;
+}
+const SHARE_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#0a84ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3"/><path d="M8 7l4-4 4 4"/><path d="M6 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1"/></svg>`;
+const ADD_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#333" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M12 8v8M8 12h8"/></svg>`;
+const DOTS_ICON = `<svg viewBox="0 0 24 24" width="22" height="22" fill="#333"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>`;
+
+function renderInstall(tab) {
+  tab = tab || (DEV.ios ? "iphone" : DEV.android ? "android" : "computer");
+  const url = appUrl();
+  const intent = `intent://${location.host}${location.pathname}#Intent;scheme=${location.protocol.replace(":", "")};package=com.android.chrome;end`;
+  const tabBtn = (k, l) => `<button class="tab ${tab === k ? "on" : ""}" onclick="renderInstall('${k}')">${l}</button>`;
+  let body = "";
+  if (tab === "android") body = `
+    ${DEV.android && DEV.inApp ? `<div class="warn-box">⚠️ You opened this inside another app (WhatsApp / Instagram). Open it in <b>Chrome</b> to install.<br><span lang="hi">इसे Chrome में खोलें, फिर इंस्टॉल करें।</span>
+      <a class="btn primary big" href="${esc(intent)}">Open in Chrome</a><button class="btn ghost" onclick="copyLink()">📋 Copy link</button></div>` : ""}
+    <button class="btn primary big one-tap" ${deferredPrompt ? "" : "hidden"} onclick="doInstall()">📲 Install now — one tap</button>
+    <ol class="steps">
+      <li><span class="n">1</span><div>Open this page in <b>Google Chrome</b>.<small lang="hi">यह पेज Google Chrome में खोलें।</small></div></li>
+      <li><span class="n">2</span><div>Tap the <b>⋮</b> menu ${DOTS_ICON} at the top-right corner.<small lang="hi">ऊपर दाईं ओर ⋮ मेनू पर टैप करें।</small></div></li>
+      <li><span class="n">3</span><div>Tap <b>Install app</b> (or <b>Add to Home screen</b>).<small lang="hi">"Install app" या "Add to Home screen" चुनें।</small></div></li>
+      <li><span class="n">4</span><div>Tap <b>Install</b>. The app icon appears on your home screen. ✅<small lang="hi">Install दबाएँ — ऐप का आइकन होम स्क्रीन पर आ जाएगा।</small></div></li>
+    </ol>`;
+  else if (tab === "iphone") body = `
+    ${DEV.ios && !DEV.iosSafari ? `<div class="warn-box">⚠️ On iPhone, apps install from <b>Safari</b>. Copy the link and open it in Safari.<br><span lang="hi">iPhone पर ऐप Safari से इंस्टॉल होता है। लिंक कॉपी करके Safari में खोलें।</span>
+      <button class="btn primary big" onclick="copyLink()">📋 Copy link for Safari</button></div>` : ""}
+    <ol class="steps">
+      <li><span class="n">1</span><div>Open this page in <b>Safari</b> 🧭.<small lang="hi">यह पेज Safari में खोलें।</small></div></li>
+      <li><span class="n">2</span><div>Tap the <b>Share</b> button ${SHARE_ICON} at the bottom of the screen (on iPad: at the top).<small lang="hi">नीचे Share बटन पर टैप करें (iPad पर ऊपर)।</small></div></li>
+      <li><span class="n">3</span><div>Scroll down and tap <b>Add to Home Screen</b> ${ADD_ICON}<small lang="hi">नीचे स्क्रॉल करके "Add to Home Screen" चुनें।</small></div></li>
+      <li><span class="n">4</span><div>Tap <b>Add</b> at the top-right. Done! ✅<small lang="hi">ऊपर दाईं ओर "Add" दबाएँ। हो गया!</small></div></li>
+    </ol>
+    ${DEV.iosSafari ? `<div class="ios-arrow">Tap ${SHARE_ICON} below<span>⬇</span></div>` : ""}`;
+  else body = `
+    <p>Scan this code with your phone camera to open the app, then install it.<br><span lang="hi">फ़ोन के कैमरे से यह कोड स्कैन करें, फिर ऐप इंस्टॉल करें।</span></p>
+    <img class="qr" alt="QR code for the app link" src="https://api.qrserver.com/v1/create-qr-code/?size=240x240&margin=10&data=${encodeURIComponent(url + "#install")}" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'hint',textContent:'(QR code needs internet)'}))">
+    <button class="btn primary one-tap" ${deferredPrompt ? "" : "hidden"} onclick="doInstall()">💻 Install on this computer</button>`;
+  app().innerHTML = header("Install the App", "go('')") + `<main class="wrap install-page">
+    <div class="inst-hero">
+      <img src="icons/icon-512.png" alt="App icon" class="inst-icon">
+      <div><h2>Learn from Pallavi Gupta</h2><p>English Grammar · Class 1–5 · English & हिंदी</p>
+      <div class="inst-tags"><span>✅ Free</span><span>📶 Works offline</span><span>🚫 No Play Store needed</span></div></div>
+    </div>
+    ${isInstalled() ? `<div class="card ok-box">✅ The app is already installed on this device. <span lang="hi">ऐप पहले से इंस्टॉल है।</span><button class="btn primary big" onclick="go('')">Open the app</button></div>` : `
+    <div class="tabs">${tabBtn("android", "🤖 Android")}${tabBtn("iphone", "📱 iPhone / iPad")}${tabBtn("computer", "💻 Computer")}</div>
+    <div class="card">${body}</div>`}
+    <div class="card share-card"><h3>📤 Share with parents & students</h3>
+      <pre class="cred">${esc(url)}</pre>
+      <div class="row"><button class="btn ghost" onclick="copyLink()">📋 Copy link</button><button class="btn primary" onclick="shareApp()">Share on WhatsApp</button></div></div>
+  </main>`;
+}
+window.renderInstall = renderInstall;
 
 /* ===================== START ===================== */
 (async function start() {
