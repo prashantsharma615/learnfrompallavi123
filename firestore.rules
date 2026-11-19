@@ -1,0 +1,43 @@
+rules_version = '2';
+// Paste this in Firebase console → Firestore Database → Rules → Publish.
+// Change the admin email below if you used a different one in firebase-config.js.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == "admin@learnfrompallavi.app";
+    }
+    function signedIn() { return request.auth != null; }
+
+    // App settings (teacher photo, welcome note) — shown on the login screen
+    match /settings/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    // Student accounts — only admin manages; a student can read only their own record
+    match /students/{studentId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow write: if isAdmin();
+    }
+    // Worksheets added by admin — every logged-in student can read
+    match /worksheets/{wsId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    // Lessons the teacher adds from the Admin panel
+    match /lessons/{lessonId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    // Notices & homework posted by admin
+    match /notices/{noticeId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    // Worksheet scores — student saves own score; admin sees all
+    match /results/{resultId} {
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow read: if isAdmin() || (signedIn() && resource.data.uid == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+  }
+}

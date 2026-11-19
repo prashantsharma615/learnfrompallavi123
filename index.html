@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Learn from Pallavi Gupta</title>
+<meta name="author" content="Pallavi Gupta">
+<meta name="description" content="By Pallavi Gupta — English Grammar for Class 1 to 5, explained in English and Hindi, with worksheets.">
+<meta name="theme-color" content="#3b2a8c">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pallavi Gupta">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&family=Hind:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app"><div style="display:flex;height:100vh;align-items:center;justify-content:center;font-family:sans-serif;color:#3b2a8c">Loading…</div></div>
+<script src="firebase-config.js"></script>
+<script src="content.js"></script>
+<script>
+window.addEventListener("error", function (e) {
+  var a = document.getElementById("app");
+  if (a && /Loading…/.test(a.textContent)) a.innerHTML = '<div style="padding:30px;font-family:sans-serif;color:#c0392b">App could not start.<br><small>' + (e.message || "") + '</small></div>';
+});
+</script>
+<script src="app.js"></script>
+</body>
+</html>
